@@ -223,9 +223,8 @@ What happens when? —
     </html>
     ```
 
-```
+---
 
 ## TODO
 
 - Add Error Boundary and see how that changes behavior
-```
