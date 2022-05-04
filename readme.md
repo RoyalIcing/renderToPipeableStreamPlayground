@@ -1,6 +1,8 @@
 # Understanding React’s `renderToPipeableStream()`
 
-Link to [`renderToPipeableStream()` documentation](https://reactjs.org/docs/react-dom-server.html#rendertopipeablestream)
+Read the [`renderToPipeableStream()` documentation](https://reactjs.org/docs/react-dom-server.html#rendertopipeablestream)
+
+I made this so I could improve the documentation [(see PR)](https://github.com/reactjs/reactjs.org/pull/4623)
 
 ---
 
