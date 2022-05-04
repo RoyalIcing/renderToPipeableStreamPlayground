@@ -29,7 +29,7 @@ ReactDOMServer.renderToPipeableStream(<App resource={resource} suspends={…} />
 
 ---
 
-- No Suspending
+- Just static content with no Suspense
   - ✅ Client-side JavaScript
     1. `onShellReady()` and start piping
     1. `onAllReady()`
