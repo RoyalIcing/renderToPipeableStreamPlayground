@@ -1,7 +1,9 @@
-import { strict as assert } from 'node:assert';
+import { strict as assert } from "node:assert";
 import { Writable } from "node:stream";
 import React from "react";
 import ReactDOMServer from "react-dom/server";
+import { Future } from "./future.mjs";
+import { Resource, useResource } from "./resource.mjs";
 
 // const { Writable } = require("stream");
 // const React = require("react");
@@ -14,6 +16,7 @@ class WritableBuffer extends Writable {
     // Calls the stream.Writable() constructor.
     super(options);
     this.chunks = [];
+    this.doneFuture = new Future();
   }
 
   _write(chunk, encoding, callback) {
@@ -22,24 +25,25 @@ class WritableBuffer extends Writable {
   }
 
   _final(callback) {
+    console.log("- Writable FINAL")
     callback();
+    this.doneFuture.resolve();
+  }
+
+  _destroy(error, callback) {
+    console.log("- Writable DESTROY", error?.message);
+    callback(error);
+    this.doneFuture.resolve();
   }
 
   toString() {
     return Buffer.concat(this.chunks).toString("utf8");
   }
+
+  get done() {
+    return this.doneFuture.promise;
+  }
 }
-
-const interval = setInterval(() => {}, 1000 * 60 * 60);
-
-// function streamToString(stream) {
-//     const chunks = [];
-//     return new Promise((resolve, reject) => {
-//         stream.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
-//         stream.on('error', (err) => reject(err));
-//         stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-//     })
-// }
 
 function delay(ms) {
   return new Promise((resolve) => {
@@ -47,104 +51,146 @@ function delay(ms) {
   });
 }
 
-class Resource {
-  constructor() {
-    this.value = undefined;
-    this.promise = new Promise((resolve, reject) => {
-      this.resolve = (value) => {
-        console.log("resolving", value);
-        this.value = value;
-        resolve(value);
-      };
-      this.reject = (value) => {
-        console.log("rejecting", value);
-        this.value = value;
-        reject(value);
-      };
-    });
+class Flags {
+  static Suspends = Symbol("Suspends");
+  static ErrorsInRootComponent = Symbol("ErrorsInRootComponent");
+  static ErrorsInSuspendedComponent = Symbol("ErrorsInSuspendedComponent");
+  static ResourceFails = Symbol("ResourceFails");
+
+  constructor(enabled = []) {
+    this.set = new Set(enabled);
+    Object.freeze(this);
+  }
+
+  get suspends() {
+    return this.set.has(Flags.Suspends);
+  }
+  get errorsInRootComponent() {
+    return this.set.has(Flags.ErrorsInRootComponent);
+  }
+  get errorsInSuspendedComponent() {
+    return this.set.has(Flags.ErrorsInSuspendedComponent);
+  }
+  get resourceFails() {
+    return this.set.has(Flags.ResourceFails);
+  }
+
+  toString() {
+    return `(${Array.from(this.set, symbol => symbol.description).join(" | ")})`;
   }
 }
 
-function useResource(resource) {
-  if (resource.value !== undefined) {
-    if (resource.value instanceof Error) {
-      throw resource.value;
-    } else {
-      return resource.value;
-    }
+function App({ flags, resource }) {
+  if (flags.errorsInRootComponent) {
+    throw Error("Failed In App");
   }
-  throw resource.promise;
+
+  return h(
+    "html",
+    null,
+    h("head", null),
+    flags.suspends
+      ? h(
+          React.Suspense,
+          { fallback: h("p", null, "Waiting") },
+          h(Loader, { resource, flags })
+        )
+      : null
+  );
 }
 
-function Loader({ resource }) {
+function Loader({ resource, flags }) {
+  if (flags.errorsInSuspendedComponent) {
+    throw Error("Failed In Loader");
+  }
+
   const value = useResource(resource);
   return h("p", null, value);
 }
 
-const Flags = {
-    Suspends: Symbol(),
-    ErrorsInRootComponent: Symbol(),
-    ErrorsInSuspendedComponent: Symbol(),
-    ErrorsInResource: Symbol(),
-};
+function makeRoot(flags, resource) {
+  const element = h(App, { flags, resource });
 
-function makeRoot(flags) {
-  const resource = new Resource();
-
-  const suspends = flags.has(Flags.Suspends);
-  const errorsInRootComponent = flags.has(Flags.ErrorsInRootComponent);
-  const errorsInSuspendedComponent = flags.has(Flags.ErrorsInSuspendedComponent);
-  const errorsInResource = flags.has(Flags.ErrorsInResource);
-
-  const element = h(
-    "html",
-    null,
-    h("head", null),
-    suspends ? h(
-      React.Suspense,
-      { fallback: h("p", null, "Waiting") },
-      h(Loader, { resource })
-    ) : null
-  );
-
+  // Some time in the future the resource is ready…
   setTimeout(() => {
-    // resource.resolve("Loaded!");
-    resource.reject(Error("Oh no!"));
+    if (flags.resourceFails) {
+      resource.reject(Error("Resource failed to load"));
+    } else {
+      resource.resolve("Resource loaded");
+    }
   }, 5);
 
   return element;
 }
 
-const stream = ReactDOMServer.renderToPipeableStream(makeRoot(new Set()), {
-  onAllReady() {
-    stream.pipe(process.stdout).once("close", () => {
-      clearInterval(interval);
-    });
+class ClientMode {
+  static Shell = Symbol("Shell");
+  static NoScript = Symbol("NoScript");
+}
 
-    // const destination = new WritableBuffer();
+async function render(flags, clientMode) {
+  console.log();
+  console.log("----");
+  console.log();
+  console.log("#", clientMode.description, `${flags}`, "#");
 
-    // const p = new Promise((resolve) => {
-    //     destination.on("close", () => {
-    //         console.log(destination.toString());
-    //         resolve();
-    //     });
+  const destination = new WritableBuffer();
 
-    //     stream.pipe(destination);
-    // });
+  destination.once('error', (error) => {
+    console.log("- OUTPUT DID ERROR:", error.message);
+  });
 
-    // p.then(() => {
-    //     clearInterval(interval);
-    // });
-  },
-  onShellError(error) {
-    console.error("SHELLERROR!", error);
-  },
-  onError(error) {
-    console.error("ERROR[", error, "]");
-  },
-});
+  const resource = new Resource();
+  const stream = ReactDOMServer.renderToPipeableStream(makeRoot(flags, resource), {
+    onShellReady() {
+      console.log("- CALLBACK: SHELL READY");
+      if (clientMode === ClientMode.Shell) {
+        console.log("    - PIPE STREAM in SHELL READY");
+        stream.pipe(destination);
+      }
+    },
+    onShellError(error) {
+      console.error("- CALLBACK: SHELL_ERROR[", error.message, "]");
+      destination.end();
+    },
+    onError(error) {
+      console.error("- CALLBACK: ERROR[", error.message, "]");
+    },
+    onAllReady() {
+      console.log("- CALLBACK: ALL READY");
+      if (clientMode === ClientMode.NoScript) {
+        console.log("    - PIPE STREAM in ALL READY");
+        stream.pipe(destination);
+      }
+    },
+  });
 
-// streamToString(stream)
-//     .then(result => {
-//         console.log(result);
-//     });
+  await destination.done;
+
+  const output = destination.toString();
+  console.log()
+  console.log(`Output ${output.length} bytes`);
+  console.log(output);
+  console.log();
+
+  await resource.promise.catch(() => null);
+}
+
+async function main() {
+  const interval = setInterval(() => {}, 1000 * 60 * 60);
+
+  await render(new Flags([]), ClientMode.Shell);
+  await render(new Flags([]), ClientMode.NoScript);
+  await render(new Flags([Flags.ErrorsInRootComponent]), ClientMode.Shell);
+  await render(new Flags([Flags.ErrorsInRootComponent]), ClientMode.NoScript);
+  await render(new Flags([Flags.Suspends]), ClientMode.Shell);
+  await render(new Flags([Flags.Suspends]), ClientMode.NoScript);
+  await render(new Flags([Flags.Suspends, Flags.ErrorsInSuspendedComponent]), ClientMode.Shell);
+  await render(new Flags([Flags.Suspends, Flags.ErrorsInSuspendedComponent]), ClientMode.NoScript);
+  await render(new Flags([Flags.Suspends, Flags.ResourceFails]), ClientMode.Shell);
+  await render(new Flags([Flags.Suspends, Flags.ResourceFails]), ClientMode.NoScript);
+
+  clearInterval(interval);
+}
+
+main();
