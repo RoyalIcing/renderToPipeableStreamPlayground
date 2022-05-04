@@ -132,42 +132,42 @@ async function render(flags, clientMode) {
   console.log();
   console.log("----");
   console.log();
-  console.log("#", clientMode.description, `${flags}`, "#");
+  console.log("####", clientMode.description, `${flags}`, "####");
 
-  const destination = new WritableBuffer();
+  const res = new WritableBuffer();
 
-  destination.once('error', (error) => {
+  res.once('error', (error) => {
     console.log("- OUTPUT DID ERROR:", error.message);
   });
 
   const resource = new Resource();
   const stream = ReactDOMServer.renderToPipeableStream(makeRoot(flags, resource), {
     onShellReady() {
-      console.log("- CALLBACK: SHELL READY");
+      console.log("- CALLBACK: onShellReady()");
       if (clientMode === ClientMode.Shell) {
-        console.log("    - PIPE STREAM in SHELL READY");
-        stream.pipe(destination);
+        console.log("    - stream.pipe(res) in onShellReady()");
+        stream.pipe(res);
       }
     },
     onShellError(error) {
-      console.error("- CALLBACK: SHELL_ERROR[", error.message, "]");
-      destination.end();
+      console.error("- CALLBACK: onShellError(", error.message, ")");
+      res.end();
     },
     onError(error) {
-      console.error("- CALLBACK: ERROR[", error.message, "]");
+      console.error("- CALLBACK: onError(", error.message, ")");
     },
     onAllReady() {
-      console.log("- CALLBACK: ALL READY");
+      console.log("- CALLBACK: onAllReady()");
       if (clientMode === ClientMode.NoScript) {
-        console.log("    - PIPE STREAM in ALL READY");
-        stream.pipe(destination);
+        console.log("    - stream.pipe(res) in onAllReady()");
+        stream.pipe(res);
       }
     },
   });
 
-  await destination.done;
+  await res.done;
 
-  const output = destination.toString();
+  const output = res.toString();
   console.log()
   console.log(`Output ${output.length} bytes`);
   console.log(output);

@@ -88,3 +88,7 @@ Link to [`renderToPipeableStream()` documentation](https://reactjs.org/docs/reac
         ```
 
 ```
+
+## TODO
+
+- Add Error Boundary and see how that changes behavior
