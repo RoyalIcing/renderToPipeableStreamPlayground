@@ -1,6 +1,11 @@
-const { Writable } = require("stream");
-const React = require("react");
-const ReactDOMServer = require("react-dom/server");
+import { strict as assert } from 'node:assert';
+import { Writable } from "node:stream";
+import React from "react";
+import ReactDOMServer from "react-dom/server";
+
+// const { Writable } = require("stream");
+// const React = require("react");
+// const ReactDOMServer = require("react-dom/server");
 
 const h = React.createElement;
 
@@ -76,18 +81,30 @@ function Loader({ resource }) {
   return h("p", null, value);
 }
 
-function makeRoot() {
+const Flags = {
+    Suspends: Symbol(),
+    ErrorsInRootComponent: Symbol(),
+    ErrorsInSuspendedComponent: Symbol(),
+    ErrorsInResource: Symbol(),
+};
+
+function makeRoot(flags) {
   const resource = new Resource();
+
+  const suspends = flags.has(Flags.Suspends);
+  const errorsInRootComponent = flags.has(Flags.ErrorsInRootComponent);
+  const errorsInSuspendedComponent = flags.has(Flags.ErrorsInSuspendedComponent);
+  const errorsInResource = flags.has(Flags.ErrorsInResource);
 
   const element = h(
     "html",
     null,
     h("head", null),
-    h(
+    suspends ? h(
       React.Suspense,
       { fallback: h("p", null, "Waiting") },
       h(Loader, { resource })
-    )
+    ) : null
   );
 
   setTimeout(() => {
@@ -98,7 +115,7 @@ function makeRoot() {
   return element;
 }
 
-const stream = ReactDOMServer.renderToPipeableStream(makeRoot(), {
+const stream = ReactDOMServer.renderToPipeableStream(makeRoot(new Set()), {
   onAllReady() {
     stream.pipe(process.stdout).once("close", () => {
       clearInterval(interval);
