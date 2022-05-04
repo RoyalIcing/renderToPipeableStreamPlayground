@@ -9,11 +9,15 @@ function App({ resource, suspends }) {
   return (
     <html>
       <head />
-      {suspends ? (
-        <Suspense fallback={<p>Waiting</p>}>
-          <Loader />
-        </Suspense>
-      ) : null}
+      <body>
+        {suspends ? (
+          <Suspense fallback={<p>Loading</p>}>
+            <Loader />
+          </Suspense>
+        ) : (
+          <p>Static content</p>
+        )}
+      </body>
     </html>
   );
 }
@@ -23,13 +27,17 @@ function Loader({ resource }) {
   return <p>{value}</p>;
 }
 
-const resource = …
-ReactDOMServer.renderToPipeableStream(<App resource={resource} suspends={…} />);
+const resource = createResource();
+ReactDOMServer.renderToPipeableStream(
+  <App resource={resource} suspends={suspends} />
+);
 ```
 
 ---
 
-- Just static content with no Suspense
+What happens when? —
+
+- When we have just static content (no Suspense)
   - ✅ Client-side JavaScript
     1. `onShellReady()` and start piping
     1. `onAllReady()`
@@ -39,6 +47,9 @@ ReactDOMServer.renderToPipeableStream(<App resource={resource} suspends={…} />
     <!DOCTYPE html>
     <html>
       <head></head>
+      <body>
+        <p>Static content</p>
+      </body>
     </html>
     ```
   - ❌ No client-side JavaScript
@@ -50,9 +61,12 @@ ReactDOMServer.renderToPipeableStream(<App resource={resource} suspends={…} />
     <!DOCTYPE html>
     <html>
       <head></head>
+      <body>
+        <p>Static content</p>
+      </body>
     </html>
     ```
-- `<App>` throws errors
+- When `<App>` throws an error
   - ✅ Client-side JavaScript
     1. `onError(error)`
     1. `onShellError(error)`
@@ -64,7 +78,7 @@ ReactDOMServer.renderToPipeableStream(<App resource={resource} suspends={…} />
     1. `onAllReady()` and start piping
     1. stream closed with ⚠️ error
     1. no bytes written
-- Suspends and resource succeeds
+- When content suspends on a resource that succeeds
   - ✅ Client-side JavaScript
     1. `onShellReady()` and start piping
     1. `onAllReady()`
@@ -73,10 +87,12 @@ ReactDOMServer.renderToPipeableStream(<App resource={resource} suspends={…} />
     ```html
     <!DOCTYPE html>
     <html>
-      <head></head
-      ><!--$?--><template id="B:0"></template>
-      <p>Waiting</p>
-      <!--/$-->
+      <head></head>
+      <body>
+        <!--$?--><template id="B:0"></template>
+        <p>Loading</p>
+        <!--/$-->
+      </body>
     </html>
     <div hidden id="S:0"><p>Resource loaded</p></div>
     <script>
@@ -117,13 +133,15 @@ ReactDOMServer.renderToPipeableStream(<App resource={resource} suspends={…} />
     ```html
     <!DOCTYPE html>
     <html>
-      <head></head
-      ><!--$-->
-      <p>Resource loaded</p>
-      <!--/$-->
+      <head></head>
+      <body>
+        <!--$-->
+        <p>Resource loaded</p>
+        <!--/$-->
+      </body>
     </html>
     ```
-- Suspends and `<Loader>` throws error
+- When content suspends and `<Loader>` throws error
   - ✅ Client-side JavaScript
     1. `onError(error)`
     1. `onShellReady()` and start piping
@@ -133,10 +151,12 @@ ReactDOMServer.renderToPipeableStream(<App resource={resource} suspends={…} />
     ```html
     <!DOCTYPE html>
     <html>
-      <head></head
-      ><!--$!-->
-      <p>Waiting</p>
-      <!--/$-->
+      <head></head>
+      <body>
+        <!--$!-->
+        <p>Loading</p>
+        <!--/$-->
+      </body>
     </html>
     ```
   - ❌ No client-side JavaScript
@@ -148,13 +168,15 @@ ReactDOMServer.renderToPipeableStream(<App resource={resource} suspends={…} />
     ```html
     <!DOCTYPE html>
     <html>
-      <head></head
-      ><!--$!-->
-      <p>Waiting</p>
-      <!--/$-->
+      <head></head>
+      <body>
+        <!--$!-->
+        <p>Loading</p>
+        <!--/$-->
+      </body>
     </html>
     ```
-- Suspends and resource rejects with error
+- When content suspends on a resource that errors
   - ✅ Client-side JavaScript
     1. `onShellReady()` and start piping
     1. `onError(error)`
@@ -164,10 +186,12 @@ ReactDOMServer.renderToPipeableStream(<App resource={resource} suspends={…} />
     ```html
     <!DOCTYPE html>
     <html>
-      <head></head
-      ><!--$?--><template id="B:0"></template>
-      <p>Waiting</p>
-      <!--/$-->
+      <head></head>
+      <body>
+        <!--$?--><template id="B:0"></template>
+        <p>Loading</p>
+        <!--/$-->
+      </body>
     </html>
     <script>
       function $RX(a) {
@@ -188,10 +212,12 @@ ReactDOMServer.renderToPipeableStream(<App resource={resource} suspends={…} />
     ```html
     <!DOCTYPE html>
     <html>
-      <head></head
-      ><!--$!-->
-      <p>Waiting</p>
-      <!--/$-->
+      <head></head>
+      <body>
+        <!--$!-->
+        <p>Loading</p>
+        <!--/$-->
+      </body>
     </html>
     ```
 

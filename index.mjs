@@ -25,7 +25,7 @@ class WritableBuffer extends Writable {
   }
 
   _final(callback) {
-    console.log("- Writable FINAL")
+    console.log("- Writable FINAL");
     callback();
     this.doneFuture.resolve();
   }
@@ -76,7 +76,9 @@ class Flags {
   }
 
   toString() {
-    return `(${Array.from(this.set, symbol => symbol.description).join(" | ")})`;
+    return `(${Array.from(this.set, (symbol) => symbol.description).join(
+      " | "
+    )})`;
   }
 }
 
@@ -89,13 +91,17 @@ function App({ flags, resource }) {
     "html",
     null,
     h("head", null),
-    flags.suspends
-      ? h(
-          React.Suspense,
-          { fallback: h("p", null, "Waiting") },
-          h(Loader, { resource, flags })
-        )
-      : null
+    h(
+      "body",
+      null,
+      flags.suspends
+        ? h(
+            React.Suspense,
+            { fallback: h("p", null, "Loading") },
+            h(Loader, { resource, flags })
+          )
+        : h("p", null, "Static content")
+    )
   );
 }
 
@@ -136,39 +142,42 @@ async function render(flags, clientMode) {
 
   const res = new WritableBuffer();
 
-  res.once('error', (error) => {
+  res.once("error", (error) => {
     console.log("- OUTPUT DID ERROR:", error.message);
   });
 
   const resource = new Resource();
-  const stream = ReactDOMServer.renderToPipeableStream(makeRoot(flags, resource), {
-    onShellReady() {
-      console.log("- CALLBACK: onShellReady()");
-      if (clientMode === ClientMode.Shell) {
-        console.log("    - stream.pipe(res) in onShellReady()");
-        stream.pipe(res);
-      }
-    },
-    onShellError(error) {
-      console.error("- CALLBACK: onShellError(", error.message, ")");
-      res.end();
-    },
-    onError(error) {
-      console.error("- CALLBACK: onError(", error.message, ")");
-    },
-    onAllReady() {
-      console.log("- CALLBACK: onAllReady()");
-      if (clientMode === ClientMode.NoScript) {
-        console.log("    - stream.pipe(res) in onAllReady()");
-        stream.pipe(res);
-      }
-    },
-  });
+  const stream = ReactDOMServer.renderToPipeableStream(
+    makeRoot(flags, resource),
+    {
+      onShellReady() {
+        console.log("- CALLBACK: onShellReady()");
+        if (clientMode === ClientMode.Shell) {
+          console.log("    - stream.pipe(res) in onShellReady()");
+          stream.pipe(res);
+        }
+      },
+      onShellError(error) {
+        console.error("- CALLBACK: onShellError(", error.message, ")");
+        res.end();
+      },
+      onError(error) {
+        console.error("- CALLBACK: onError(", error.message, ")");
+      },
+      onAllReady() {
+        console.log("- CALLBACK: onAllReady()");
+        if (clientMode === ClientMode.NoScript) {
+          console.log("    - stream.pipe(res) in onAllReady()");
+          stream.pipe(res);
+        }
+      },
+    }
+  );
 
   await res.done;
 
   const output = res.toString();
-  console.log()
+  console.log();
   console.log(`Output ${output.length} bytes`);
   console.log(output);
   console.log();
@@ -185,10 +194,22 @@ async function main() {
   await render(new Flags([Flags.ErrorsInRootComponent]), ClientMode.NoScript);
   await render(new Flags([Flags.Suspends]), ClientMode.Shell);
   await render(new Flags([Flags.Suspends]), ClientMode.NoScript);
-  await render(new Flags([Flags.Suspends, Flags.ErrorsInSuspendedComponent]), ClientMode.Shell);
-  await render(new Flags([Flags.Suspends, Flags.ErrorsInSuspendedComponent]), ClientMode.NoScript);
-  await render(new Flags([Flags.Suspends, Flags.ResourceFails]), ClientMode.Shell);
-  await render(new Flags([Flags.Suspends, Flags.ResourceFails]), ClientMode.NoScript);
+  await render(
+    new Flags([Flags.Suspends, Flags.ErrorsInSuspendedComponent]),
+    ClientMode.Shell
+  );
+  await render(
+    new Flags([Flags.Suspends, Flags.ErrorsInSuspendedComponent]),
+    ClientMode.NoScript
+  );
+  await render(
+    new Flags([Flags.Suspends, Flags.ResourceFails]),
+    ClientMode.Shell
+  );
+  await render(
+    new Flags([Flags.Suspends, Flags.ResourceFails]),
+    ClientMode.NoScript
+  );
 
   clearInterval(interval);
 }
